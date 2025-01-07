@@ -14,10 +14,10 @@ const registerUser = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await User.create({ username, email, password: hashedPassword });
-        const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET_KEY, { expiresIn: "1d" });
+        const token = jwt.sign({ _id: newUser._id }, process.env.JWT_SECRET_KEY, { expiresIn: "1d" });
 
         printLog("SUCCESS", `User ${newUser.username} registered`);
-        res.status(201).json({ message: "User registered successfully", token });
+        res.status(201).json({ message: "User registered successfully", token, newUser});
     } catch (error) {
         printLog("ERROR", error.message);
         res.status(500).json({ message: "Internal server error" });
@@ -51,16 +51,14 @@ const login = async (req, res) => {
         return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET_KEY, { expiresIn: "1d" });
+    const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET_KEY, { expiresIn: "1d" });
     printLog("SUCCESS", `User ${user.username} logged in`);
-    res.status(200).json({ message: "Login successful", token });
+    res.status(200).json({ message: "Login successful", token, user });
 };
 
 const checkAuthentication = async (req, res) => {
     try {
-        const authorizationToken = req.headers.authorization.split(" ")[1];
-        const decodedToken = jwt.verify(authorizationToken, process.env.JWT_SECRET_KEY);
-        const user = await User.findById(decodedToken.id);
+        const user = await User.findById(req.userId);
         if (!user) {
             printLog("ERROR", "User not found");
             return res.status(401).json({ message: "Unauthorized" });
@@ -76,7 +74,7 @@ const checkAuthentication = async (req, res) => {
 
 const deleteUser = async (req, res) => {
     try {
-        const deletedUser = await User.findOneAndDelete({ username: req.params.username });
+        const deletedUser = await User.findOneAndDelete({ _id: req.userId });
         if (!deletedUser) {
             printLog("ERROR", "User not found");
             return res.status(404).json({ message: "User not found" });
@@ -89,5 +87,21 @@ const deleteUser = async (req, res) => {
     }
 };
 
-export { registerUser, login, checkAuthentication, deleteUser };
+// check if a username is available in the database
+const userExists = async (req, res) => {
+    try {
+        const user = await User.findOne({ username: req.params.username });
+        if (user) {
+            printLog("ERROR", `Username ${user.username} is already taken`);
+            res.status(400).json({ message: "Username is already taken" });
+        } else {
+            printLog("SUCCESS", `Username ${req.params.username} is available`);
+            res.status(200).json({ message: "Username is available" });
+        }
+    } catch (error) {
+        printLog("ERROR", error.message);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
 
+export { registerUser, login, checkAuthentication, deleteUser, userExists };
