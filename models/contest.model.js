@@ -1,12 +1,8 @@
-import { model, Schema, Types } from "mongoose";
+import { model, Schema } from "mongoose";
 
-const Contest = new Schema({
+const contestSchema = new Schema({
     name: { type: String, required: true },
-    creatorId: { type: Types.ObjectId, ref: "User", required: true },
-    participants: [{
-        name: { type: String, required: true },
-        score: { type: Number, required: true }
-    }]
-})
+    creatorId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+}, { timestamps: true });
 
-export default model("Contest", Contest)
+export default model("Contest", contestSchema);

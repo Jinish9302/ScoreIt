@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { createContest, fetchAllContests, fetchContestDetails, deleteContestsByIds } from "../controllers/contest.controller.js";
+import {
+    createContest,
+    fetchAllContests,
+    fetchContestDetails,
+    deleteContestsByIds,
+    updateContestName, 
+    updateParticipantName
+} from "../controllers/contest.controller.js";
 import { body } from "express-validator";
 import parseJWT from "../middlewares/parseJWT.middleware.js";
 import checkParticipantArrayElements from "../middlewares/checkParticipantArrayElements.middleware.js";
@@ -29,6 +36,19 @@ contestRoute.delete("/delete-contests-by-ids",
     parseJWT,
     body("contestIds").notEmpty(),
     deleteContestsByIds
+);
+
+// update contest name
+contestRoute.patch("/update-contest-name",
+    parseJWT,
+    body("name").notEmpty(),
+    updateContestName
+);
+
+// update participant names
+contestRoute.patch("/update-participant-name",
+    parseJWT,
+    updateParticipantName
 );
 
 export default contestRoute;

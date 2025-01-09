@@ -58,7 +58,7 @@ const login = async (req, res) => {
 
 const checkAuthentication = async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.body.userId);
         if (!user) {
             printLog("ERROR", "User not found");
             return res.status(401).json({ message: "Unauthorized" });
@@ -74,7 +74,7 @@ const checkAuthentication = async (req, res) => {
 
 const deleteUser = async (req, res) => {
     try {
-        const deletedUser = await User.findOneAndDelete({ _id: req.userId });
+        const deletedUser = await User.findOneAndDelete({ _id: req.body.userId });
         if (!deletedUser) {
             printLog("ERROR", "User not found");
             return res.status(404).json({ message: "User not found" });
