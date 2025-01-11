@@ -1,7 +1,7 @@
 import User from "../models/user.model.js";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import printLog from "../utils/printLog.js";
+import createJWT from "../utils/createJWT.js";
 
 const registerUser = async (req, res) => {
     const { username, email, password } = req.body;
@@ -14,7 +14,7 @@ const registerUser = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await User.create({ username, email, password: hashedPassword });
-        const token = jwt.sign({ _id: newUser._id }, process.env.JWT_SECRET_KEY, { expiresIn: "1d" });
+        const token = createJWT("manager", newUser._id);
 
         printLog("SUCCESS", `User ${newUser.username} registered`);
         res.status(201).json({ message: "User registered successfully", token, newUser});
@@ -51,7 +51,7 @@ const login = async (req, res) => {
         return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET_KEY, { expiresIn: "1d" });
+    const token = createJWT("manager", user._id);
     printLog("SUCCESS", `User ${user.username} logged in`);
     res.status(200).json({ message: "Login successful", token, user });
 };
@@ -59,13 +59,11 @@ const login = async (req, res) => {
 const checkAuthentication = async (req, res) => {
     try {
         const user = await User.findById(req.body.userId);
-        if (!user) {
-            printLog("ERROR", "User not found");
-            return res.status(401).json({ message: "Unauthorized" });
+        if (!user || req.body.role !== "manager") {
+            throw new Error("Unauthorized");
         }
         printLog("SUCCESS", `User ${user.username} authenticated`);
-        req.user = user;
-        res.status(200).json({ message: "Valid token" });
+        res.status(200).json({ message: "Valid token", username: user.username });
     } catch (error) {
         printLog("ERROR", error.message);
         res.status(401).json({ message: "Unauthorized" });
@@ -73,6 +71,11 @@ const checkAuthentication = async (req, res) => {
 };
 
 const deleteUser = async (req, res) => {
+    if (req.body.role !== "manager") {
+        printLog("ERROR", "Unauthorized");
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+
     try {
         const deletedUser = await User.findOneAndDelete({ _id: req.body.userId });
         if (!deletedUser) {
@@ -104,4 +107,10 @@ const userExists = async (req, res) => {
     }
 };
 
-export { registerUser, login, checkAuthentication, deleteUser, userExists };
+export {
+    registerUser,
+    login,
+    checkAuthentication,
+    deleteUser,
+    userExists
+};

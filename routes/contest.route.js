@@ -5,7 +5,9 @@ import {
     fetchContestDetails,
     deleteContestsByIds,
     updateContestName, 
-    updateParticipantName
+    updateParticipantName,
+    createContestTokens,
+    addScore
 } from "../controllers/contest.controller.js";
 import { body } from "express-validator";
 import parseJWT from "../middlewares/parseJWT.middleware.js";
@@ -49,6 +51,20 @@ contestRoute.patch("/update-contest-name",
 contestRoute.patch("/update-participant-name",
     parseJWT,
     updateParticipantName
+);
+
+// create contest tokens for judges and participants
+contestRoute.get("/create-contest-tokens",
+    parseJWT,
+    createContestTokens
+);
+
+// add score
+contestRoute.patch("/add-score",
+    parseJWT,
+    body("participantId").notEmpty(),
+    body("score").notEmpty(),
+    addScore
 );
 
 export default contestRoute;
