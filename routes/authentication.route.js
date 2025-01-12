@@ -1,35 +1,25 @@
 import { Router } from "express";
-import { login, registerUser, checkAuthentication, deleteUser } from "../controllers/authentication.controller.js";
+import { login, registerUser, checkAuthentication, deleteUser, userExists } from "../controllers/authentication.controller.js";
 import parseJWT from "../middlewares/parseJWT.middleware.js";
 import { body, param } from "express-validator";
 
 const router = Router();
 
-router.post(
-    "/register",
-    [
-        body("username").notEmpty(),
-        body("email").isEmail(),
-        body("password").notEmpty(),
-    ],
-    registerUser
-);
+// authentication routes
 
-router.get(
-    "/login",
-    login
-);
+// Register User
+router.post("/register", [body("username").notEmpty(), body("email").isEmail(), body("password").notEmpty()], registerUser);
 
+// Login User
+router.get("/login", login);
+
+// Check Authentication
 router.get("/check-authentication", parseJWT, checkAuthentication);
 
-router.deleteclear
-(
-    "/delete-user/:username",
-    [
-        parseJWT,
-        param("username").notEmpty(),
-    ],
-    deleteUser
-);
+// Delete User
+router.delete("/delete-user", [parseJWT, param("username").notEmpty()], deleteUser);
+
+// user exists
+router.get("/user-exists/:username", param("username").notEmpty(), userExists);
 
 export default router;
