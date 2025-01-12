@@ -2,7 +2,6 @@ import User from "../models/user.model.js";
 import bcrypt from "bcrypt";
 import printLog from "../utils/printLog.js";
 import createJWT from "../utils/createJWT.js";
-
 const registerUser = async (req, res) => {
     const { username, email, password } = req.body;
 
@@ -17,7 +16,7 @@ const registerUser = async (req, res) => {
         const token = createJWT("manager", newUser._id);
 
         printLog("SUCCESS", `User ${newUser.username} registered`);
-        res.status(201).json({ message: "User registered successfully", token, newUser});
+        res.status(201).json({ message: "User registered successfully", token, user: newUser.with("_id", "username", "email", "createdAt", "updatedAt") });
     } catch (error) {
         printLog("ERROR", error.message);
         res.status(500).json({ message: "Internal server error" });
@@ -53,12 +52,12 @@ const login = async (req, res) => {
 
     const token = createJWT("manager", user._id);
     printLog("SUCCESS", `User ${user.username} logged in`);
-    res.status(200).json({ message: "Login successful", token, user });
+    res.status(200).json({ message: "Login successful", token, user: user.with("_id", "username", "email", "createdAt", "updatedAt") });
 };
 
 const checkAuthentication = async (req, res) => {
     try {
-        const user = await User.findById(req.body.userId);
+        const user = await User.findById(req.body._id);
         if (!user || req.body.role !== "manager") {
             throw new Error("Unauthorized");
         }
@@ -77,7 +76,7 @@ const deleteUser = async (req, res) => {
     }
 
     try {
-        const deletedUser = await User.findOneAndDelete({ _id: req.body.userId });
+        const deletedUser = await User.findOneAndDelete({ _id: req.body._id });
         if (!deletedUser) {
             printLog("ERROR", "User not found");
             return res.status(404).json({ message: "User not found" });
