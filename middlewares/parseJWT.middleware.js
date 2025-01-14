@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import redisClient from "../redis.js";
+import { redisClient } from "../db.js";
 const parseJWT = async (req, res, next) => {
     try {
         const token = req.headers.authorization.split(" ")[1];

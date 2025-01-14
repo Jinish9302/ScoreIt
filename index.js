@@ -1,6 +1,6 @@
 // Import Modueles
 import express from "express"
-import connectDB from "./db.js"
+import { connectDB } from "./db.js"
 import authRoute from "./routes/authentication.route.js"
 import contestRoute from "./routes/contest.route.js"
 import printLog from "./utils/printLog.js"

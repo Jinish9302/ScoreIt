@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from 'uuid';
-import redisClient from "../redis.js";
+import { redisClient } from "../db.js";
 
 export default ( role, _id ) => {
     let tokenId = uuidv4();
