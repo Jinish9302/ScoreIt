@@ -8,7 +8,7 @@ const parseJWT = async (req, res, next) => {
         if (storedTokenId !== tokenId) {
             return res.status(403).json({ message: "Token has been revoked or unauthorized" });
         }
-        req.body = { _id, role };
+        req.body = { ...req.body, _id, role };
         next();
     } catch (error) {
         res.status(401).json({ message: "Unauthorized" });

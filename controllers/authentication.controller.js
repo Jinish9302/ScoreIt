@@ -2,6 +2,7 @@ import User from "../models/user.model.js";
 import bcrypt from "bcrypt";
 import printLog from "../utils/printLog.js";
 import createJWT from "../utils/createJWT.js";
+
 const registerUser = async (req, res) => {
     const { username, email, password } = req.body;
 

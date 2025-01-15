@@ -5,6 +5,7 @@ import authRoute from "./routes/authentication.route.js"
 import contestRoute from "./routes/contest.route.js"
 import printLog from "./utils/printLog.js"
 import declarePrototypes from "./utils/prototypes.js"
+import { applyCronJobs } from "./utils/cronJobs.js"
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -13,6 +14,8 @@ const PORT = process.env.PORT || 3000
 connectDB()
 // declare prototypes
 declarePrototypes()
+// declare Cron Jobs
+applyCronJobs()
 
 app.use(express.json())
 
