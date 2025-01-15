@@ -3,24 +3,28 @@ import Participant from "../models/participant.model.js";
 import createJWT from "../utils/createJWT.js";
 import printLog from "../utils/printLog.js";
 import { mongoose } from "mongoose";
+import { redisClient } from "../db.js";
 
 const createContest = async (req, res) => {
     if (req.body.role !== "manager") {
         printLog("ERROR", "Unauthorized");
         return res.status(401).json({ message: "Unauthorized" });
     }
-    const { name, userId: creatorId, participants } = req.body;
+    const { name, _id: creatorId, participants } = req.body;
     const formattedParticipants = participants.map((participant) => ({
         ...participant,
         score: 0
     }));
     try {
         const newContest = await Contest.create({ name, creatorId });
-        await Participant.insertMany(formattedParticipants.map((participant) => ({
-            ...participant,
-            contestId: newContest._id
-        })));
-        res.status(201).json({ message: "Contest created successfully" });
+        const storedParticipants = await Participant.insertMany(
+            formattedParticipants.map((participant) => ({
+                ...participant,
+                contestId: newContest._id,
+            }))
+        );
+        await redisClient.mSet(storedParticipants.map((participant) => [`score:${participant.contestId}:${participant._id}`, '0']));
+        res.status(201).json({ message: "Contest created successfully", contest: newContest });
     } catch (error) {
         printLog("ERROR", `Error creating contest: ${error.message}`);
         res.status(500).json({ message: "Internal server error" });
@@ -33,7 +37,7 @@ const fetchAllContests = async (req, res) => {
         printLog("ERROR", "Unauthorized");
         return res.status(401).json({ message: "Unauthorized" });
     }
-    const pageNumber = req.query.pageNumber ? parseInt(req.query.pageNumber, 10) : 0;
+    const pageNumber = req.query.pageNumber ? parseInt(req.query .pageNumber, 10) : 0;
     const pageSize = req.query.pageSize ? parseInt(req.query.pageSize, 10) : 10;
     const skip = pageNumber * pageSize;
     try {
@@ -41,7 +45,7 @@ const fetchAllContests = async (req, res) => {
             { $match: { creatorId: new mongoose.Types.ObjectId(req.body._id) } },
             { $skip: skip },
             { $limit: pageSize },
-            { 
+            {
                 $lookup: {
                     from: "participants",
                     localField: "_id",
@@ -50,9 +54,28 @@ const fetchAllContests = async (req, res) => {
                 }
             }
         ]);
-        res.status(200).json(userContests);
+        const keys = userContests.flatMap(contest => contest.participants.map(participant => `score:${contest._id}:${participant._id}`));
+        if(keys.length === 0) return res.status(200).json([])
+        const scores = await redisClient.mGet(keys);
+        let scoreObj = {};
+        for (let i = 0; i < keys.length; i++) {
+            let key = keys[i].split(':');
+            if (!scoreObj[key[1]]) {
+                scoreObj[key[1]] = {}
+            }
+            scoreObj[key[1]][key[2]] = parseInt(scores[i]);
+        }
+        const updatedContests = userContests.map(contest => ({
+            ...contest,
+            participants: contest.participants.map(participant => ({
+                ...participant,
+                score: scoreObj[participant.contestId][participant._id] ?? 0
+            }))
+        }));
+        res.status(200).json(updatedContests);
+
     } catch (error) {
-        printLog("ERROR", "Internal server error");
+        printLog("ERROR", `Internal server error: ${error.message}`);
         res.status(500).json({ message: "Internal server error" });
     }
 };
@@ -61,6 +84,7 @@ const fetchAllContests = async (req, res) => {
 const fetchContestDetails = async (req, res) => {
     try {
         let contest;
+        console.log(req.body.role);
         if (req.body.role === "manager") {
             const { contestIds } = req.query;
             const ids = contestIds ? contestIds.split(",").filter(Boolean) : [];
@@ -75,6 +99,23 @@ const fetchContestDetails = async (req, res) => {
                     }
                 }
             ]);
+            const keys = contest.flatMap(contest => contest.participants.map(participant => `score:${contest._id}:${participant._id}`));
+            const scores = await redisClient.mGet(keys);
+            let scoreObj = {};
+            for (let i = 0; i < keys.length; i++) {
+                let key = keys[i].split(':');
+                if (!scoreObj[key[1]]) {
+                    scoreObj[key[1]] = {}
+                }
+                scoreObj[key[1]][key[2]] = parseInt(scores[i]);
+            }
+            contest = contest.map(contest => ({
+                ...contest,
+                participants: contest.participants.map(participant => ({
+                    ...participant,
+                    score: scoreObj[participant.contestId][participant._id] ?? 0
+                }))
+            }))
         } else {
             contest = await Contest.aggregate([
                 { $match: { _id: new mongoose.Types.ObjectId(req.body._id) } },
@@ -87,6 +128,24 @@ const fetchContestDetails = async (req, res) => {
                     }
                 }
             ]);
+            
+            const keys = contest.flatMap(contest => contest.participants.map(participant => `score:${contest._id}:${participant._id}`));
+            const scores = await redisClient.mGet(keys);
+            let scoreObj = {};
+            for (let i = 0; i < keys.length; i++) {
+                let key = keys[i].split(':');
+                if (!scoreObj[key[1]]) {
+                    scoreObj[key[1]] = {}
+                }
+                scoreObj[key[1]][key[2]] = parseInt(scores[i]);
+            }
+            contest = contest.map(contest => ({
+                ...contest,
+                participants: contest.participants.map(participant => ({
+                    ...participant,
+                    score: scoreObj[participant.contestId][participant._id] ?? 0
+                }))
+            }))
         }
         if (!contest) {
             return res.status(404).json({ message: "Contest not found" });
@@ -108,11 +167,15 @@ const deleteContestsByIds = async (req, res) => {
     const ids = contestIds ? contestIds.split(",").filter(Boolean) : false;
     try {
         if (!ids) {
-            await Contest.deleteMany({ creatorId: req.body.userId });
+            const contests = await Contest.find({ creatorId: req.body._id }, { _id: 1 });
+            await Contest.deleteMany({ creatorId: req.body._id });
+            const contestIds = contests.map(contest => contest._id.toString());
+            await redisClient.DEL(contestIds.map(id => `score:${id}:*`));
         } else {
-            await Contest.deleteMany({ _id: { $in: ids }, creatorId: req.body.userId });
+            await Contest.deleteMany({ _id: { $in: ids }, creatorId: req.body._id });
+            await redisClient.DEL(ids.map(id => `score:${id}:*`));
         }
-
+        
         res.status(200).json({ message: "Contests deleted successfully" });
     } catch (error) {
         printLog("ERROR", "Internal server error");
@@ -214,16 +277,13 @@ const addScore = async (req, res) => {
         return res.status(401).json({ message: "Unauthorized" });
     }
     try {
-        const updatedParticipant = await Participant.findOneAndUpdate(
-            { _id: participantId },
-            { $inc: { score } },
-            { new: true }
-        ).exec();
-        if (!updatedParticipant) {
-            return res.status(404).json({ message: "Participant not found" });
+        const result = await redisClient.incrBy(`score:${req.body._id}:${participantId}`, score);
+        if (result === 1) {
+            return res.status(404).json({ message: "Participant doesn't exist" });
         }
-        res.status(200).json({ _id: updatedParticipant._id, score: updatedParticipant.score });
+        res.status(200).json({ message: "Score added successfully" });
     } catch (error) {
+        printLog("ERROR", error.message);
         res.status(500).json({ message: "Internal server error" });
     }
 };
