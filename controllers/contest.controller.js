@@ -4,6 +4,7 @@ import createJWT from "../utils/createJWT.js";
 import printLog from "../utils/printLog.js";
 import { mongoose } from "mongoose";
 import { redisClient } from "../db.js";
+import { getSocketInstance } from "../utils/socket-builder.js";
 
 const createContest = async (req, res) => {
     if (req.body.role !== "manager") {
@@ -128,7 +129,7 @@ const fetchContestDetails = async (req, res) => {
                     }
                 }
             ]);
-            
+
             const keys = contest.flatMap(contest => contest.participants.map(participant => `score:${contest._id}:${participant._id}`));
             const scores = await redisClient.mGet(keys);
             let scoreObj = {};
@@ -175,7 +176,7 @@ const deleteContestsByIds = async (req, res) => {
             await Contest.deleteMany({ _id: { $in: ids }, creatorId: req.body._id });
             await redisClient.DEL(ids.map(id => `score:${id}:*`));
         }
-        
+
         res.status(200).json({ message: "Contests deleted successfully" });
     } catch (error) {
         printLog("ERROR", "Internal server error");
@@ -265,12 +266,13 @@ const createContestTokens = async (req, res) => {
 
 // add score to a participant taken from query params
 const addScore = async (req, res) => {
+    const io = getSocketInstance();
     if (req.body.role !== "judge" && req.body.role !== "manager") {
         printLog("ERROR", "Unauthorized");
         return res.status(401).json({ message: "Unauthorized" });
     }
-    const { participantId, score } = req.query;
-    if (!participantId || !score) {
+    const { participantId, contestId, score } = req.query;
+    if (!participantId || !score || !contestId) {
         return res.status(400).json({ message: "Missing required fields" });
     }
     if (req.body.role !== "judge") {
@@ -281,6 +283,7 @@ const addScore = async (req, res) => {
         if (result === 1) {
             return res.status(404).json({ message: "Participant doesn't exist" });
         }
+        io.socket.emit(`score:${contestId}`, { participantId, score });
         res.status(200).json({ message: "Score added successfully" });
     } catch (error) {
         printLog("ERROR", error.message);
